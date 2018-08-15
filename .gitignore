@@ -1,0 +1,7 @@
+.DS_Store
+pkg
+bin
+ql-crud.exe
+vendor
+Gopkg.lock
+Gopkg.toml
