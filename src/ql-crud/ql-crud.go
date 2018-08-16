@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/big"
 	"strconv"
 
 	"github.com/cznic/ql"
@@ -79,7 +80,7 @@ func deleteData(id uint64, db *ql.DB) error {
 func selectData(table string, db *ql.DB) ([][]interface{}, error) {
 	s, _, err := db.Run(ql.NewRWCtx(),
 		`begin transaction;
-		select id(), id, title, author from `+table+` order by id() desc;
+		select id, title, author from `+table+` order by id() desc;
 		commit;`)
 	if err != nil {
 		return nil, err
@@ -124,11 +125,25 @@ func main() {
 		panic(err)
 	}
 
-	// if err = updateData(&book, table, db); err != nil {
-	// 	panic(err)
-	// }
-
 	data, err := selectData(table, db)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(data)
+	for _, v := range data {
+		book.ID = uint(v[0].(*big.Int).Uint64())
+		book.Title = v[1].(string)
+		book.Author = v[2].(string)
+	}
+
+	book.Title = "First Avenger"
+
+	if err = updateData(&book, table, db); err != nil {
+		panic(err)
+	}
+
+	data, err = selectData(table, db)
 	if err != nil {
 		panic(err)
 	}
