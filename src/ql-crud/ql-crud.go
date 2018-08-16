@@ -7,10 +7,17 @@ import (
 	"github.com/cznic/ql"
 )
 
-func createTable(db *ql.DB) error {
+// Book : 책 정보
+type Book struct {
+	ID     uint
+	Title  string
+	Author string
+}
+
+func createTable(table string, db *ql.DB) error {
 	_, _, err := db.Run(ql.NewRWCtx(),
 		`begin transaction;
-		create table if not exists books (id bigint, title string, author string);
+		create table if not exists `+table+` (id bigint, title string, author string);
 		commit;`)
 	if err != nil {
 		return err
@@ -19,42 +26,34 @@ func createTable(db *ql.DB) error {
 	return nil
 }
 
-func insertData(db *ql.DB) error {
-	_, _, err := db.Run(ql.NewRWCtx(),
-		`begin transaction;
-		insert into books (id, title, author) values (1, "Book Title", "Author Man");
-		insert into books (id, title, author) values (2, "Titleaaa", "Girl");
-		commit;`)
+func insertData(book *Book, table string, db *ql.DB) error {
+	s, _, err := db.Run(ql.NewRWCtx(), `begin transaction; select id() from `+table+` order by id() desc limit 1; commit;`)
 	if err != nil {
 		return err
 	}
-
-	s, _, err := db.Run(ql.NewRWCtx(),
-		`begin transaction;
-		select id() from books order by id() desc limit 1;
-		commit;`)
-	if err != nil {
-		return err
-	}
+	lastID := uint64(1)
 	lastData, _ := s[0].FirstRow()
-	lastID := uint64(lastData[0].(int64) + 1)
+	if len(lastData) > 0 {
+		lastID = uint64(lastData[0].(int64) + 1)
+	}
 
 	_, _, err = db.Run(ql.NewRWCtx(),
 		`begin transaction;
-		insert into books values (`+strconv.FormatUint(lastID, 10)+`, "Booooooooooook", "Childddd");
+		insert into `+table+` values (`+strconv.FormatUint(lastID, 10)+`, "`+book.Title+`", "`+book.Author+`");
 		commit;`)
 	if err != nil {
-		fmt.Println("WTF::", err)
 		return err
 	}
 
 	return nil
 }
 
-func updateData(db *ql.DB) error {
+func updateData(book *Book, table string, db *ql.DB) error {
+	idStr := strconv.FormatUint(uint64(book.ID), 16)
+
 	_, _, err := db.Run(ql.NewRWCtx(),
 		`begin transaction;
-		update books set title="Bokkk name^_^_^", author="Woman" where id==2;
+		update `+table+` set title="`+book.Title+`", author="`+book.Author+`" where id==`+idStr+`;
 		commit;`)
 	if err != nil {
 		return err
@@ -63,25 +62,40 @@ func updateData(db *ql.DB) error {
 	return nil
 }
 
-func selectData(db *ql.DB) error {
-	s, _, err := db.Run(ql.NewRWCtx(),
+func deleteData(id uint64, db *ql.DB) error {
+	idStr := strconv.FormatUint(id, 16)
+
+	_, _, err := db.Run(ql.NewRWCtx(),
 		`begin transaction;
-		select id(), id, title, author from books order by id() desc;
+		delete from books where id==`+idStr+`;
 		commit;`)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func selectData(table string, db *ql.DB) ([][]interface{}, error) {
+	s, _, err := db.Run(ql.NewRWCtx(),
+		`begin transaction;
+		select id(), id, title, author from `+table+` order by id() desc;
+		commit;`)
+	if err != nil {
+		return nil, err
 	}
 
 	data, _ := s[0].Rows(99, 0)
-	fmt.Println(data)
+	// fmt.Println(data)
+	// fmt.Println(reflect.TypeOf(data))
 
-	return nil
+	return data, nil
 }
 
-func dropTable(db *ql.DB) error {
+func dropTable(table string, db *ql.DB) error {
 	_, _, err := db.Run(ql.NewRWCtx(),
 		`begin transaction;
-		drop table books;
+		drop table `+table+`;
 		commit;`)
 	if err != nil {
 		return err
@@ -96,25 +110,32 @@ func main() {
 	db, err := ql.OpenFile(dbname, &ql.Options{CanCreate: true, RemoveEmptyWAL: true})
 	defer db.Close()
 	if err != nil {
+		fmt.Println("DB Exist", err)
+	}
+
+	table := "books"
+	book := Book{Title: "First Book", Author: "Steve Rogers"}
+
+	if err = createTable(table, db); err != nil {
+		fmt.Println("Table Exist", err)
+	}
+
+	if err = insertData(&book, table, db); err != nil {
 		panic(err)
 	}
 
-	if err = createTable(db); err != nil {
+	// if err = updateData(&book, table, db); err != nil {
+	// 	panic(err)
+	// }
+
+	data, err := selectData(table, db)
+	if err != nil {
 		panic(err)
 	}
 
-	if err = insertData(db); err != nil {
-		panic(err)
-	}
-	if err = updateData(db); err != nil {
-		panic(err)
-	}
+	fmt.Println(data)
 
-	if err = selectData(db); err != nil {
-		panic(err)
-	}
-
-	if err = dropTable(db); err != nil {
+	if err = dropTable(table, db); err != nil {
 		panic(err)
 	}
 }
