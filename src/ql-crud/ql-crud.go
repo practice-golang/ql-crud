@@ -15,7 +15,8 @@ type Book struct {
 	Author string
 }
 
-func createTable(table string, db *ql.DB) error {
+// CreateTable : 테이블 생성
+func CreateTable(table string, db *ql.DB) error {
 	_, _, err := db.Run(ql.NewRWCtx(),
 		`begin transaction;
 		create table if not exists `+table+` (id bigint, title string, author string);
@@ -27,10 +28,25 @@ func createTable(table string, db *ql.DB) error {
 	return nil
 }
 
-func insertData(book *Book, table string, db *ql.DB) error {
-	s, _, err := db.Run(ql.NewRWCtx(), `begin transaction; select id() from `+table+` order by id() desc limit 1; commit;`)
+// DropTable : 테이블 드랍
+func DropTable(table string, db *ql.DB) error {
+	_, _, err := db.Run(ql.NewRWCtx(),
+		`begin transaction;
+		drop table `+table+`;
+		commit;`)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// InsertData : Crud
+func InsertData(book *Book, table string, db *ql.DB) error {
+	s, _, err := db.Run(ql.NewRWCtx(), `begin transaction; select id() from `+table+` order by id() desc limit 1; commit;`)
+	if err != nil {
+		panic(err)
+		// return err
 	}
 	lastID := uint64(1)
 	lastData, _ := s[0].FirstRow()
@@ -43,41 +59,15 @@ func insertData(book *Book, table string, db *ql.DB) error {
 		insert into `+table+` values (`+strconv.FormatUint(lastID, 10)+`, "`+book.Title+`", "`+book.Author+`");
 		commit;`)
 	if err != nil {
-		return err
+		panic(err)
+		// return err
 	}
 
 	return nil
 }
 
-func updateData(book *Book, table string, db *ql.DB) error {
-	idStr := strconv.FormatUint(uint64(book.ID), 16)
-
-	_, _, err := db.Run(ql.NewRWCtx(),
-		`begin transaction;
-		update `+table+` set title="`+book.Title+`", author="`+book.Author+`" where id==`+idStr+`;
-		commit;`)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func deleteData(id uint64, db *ql.DB) error {
-	idStr := strconv.FormatUint(id, 16)
-
-	_, _, err := db.Run(ql.NewRWCtx(),
-		`begin transaction;
-		delete from books where id==`+idStr+`;
-		commit;`)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func selectData(table string, db *ql.DB) ([][]interface{}, error) {
+// SelectData : Crud
+func SelectData(table string, db *ql.DB) ([][]interface{}, error) {
 	s, _, err := db.Run(ql.NewRWCtx(),
 		`begin transaction;
 		select id, title, author from `+table+` order by id() desc;
@@ -93,13 +83,33 @@ func selectData(table string, db *ql.DB) ([][]interface{}, error) {
 	return data, nil
 }
 
-func dropTable(table string, db *ql.DB) error {
+// UpdateData : crUd
+func UpdateData(book *Book, table string, db *ql.DB) error {
+	idStr := strconv.FormatUint(uint64(book.ID), 16)
+
 	_, _, err := db.Run(ql.NewRWCtx(),
 		`begin transaction;
-		drop table `+table+`;
+		update `+table+` set title="`+book.Title+`", author="`+book.Author+`" where id==`+idStr+`;
 		commit;`)
 	if err != nil {
-		return err
+		panic(err)
+		// return err
+	}
+
+	return nil
+}
+
+// DeleteData : cruD
+func DeleteData(id uint64, db *ql.DB) error {
+	idStr := strconv.FormatUint(id, 16)
+
+	_, _, err := db.Run(ql.NewRWCtx(),
+		`begin transaction;
+		delete from books where id==`+idStr+`;
+		commit;`)
+	if err != nil {
+		panic(err)
+		// return err
 	}
 
 	return nil
@@ -108,49 +118,40 @@ func dropTable(table string, db *ql.DB) error {
 const dbname = "./ql.db"
 
 func main() {
+	table := "books"
+	var books []Book
+	book := Book{Title: "First Book", Author: "Steve Rogers"}
+
+	// DB 준비. 없으면 생성. ql.Open은 lock 파일 삭제 방도를 못 찾아서 일단 안 씀.
 	db, err := ql.OpenFile(dbname, &ql.Options{CanCreate: true, RemoveEmptyWAL: true})
 	defer db.Close()
 	if err != nil {
 		fmt.Println("DB Exist", err)
 	}
 
-	table := "books"
-	book := Book{Title: "First Book", Author: "Steve Rogers"}
-
-	if err = createTable(table, db); err != nil {
+	if err = CreateTable(table, db); err != nil {
 		fmt.Println("Table Exist", err)
 	}
 
-	if err = insertData(&book, table, db); err != nil {
-		panic(err)
-	}
+	InsertData(&book, table, db) // Crud
 
-	data, err := selectData(table, db)
-	if err != nil {
-		panic(err)
-	}
-
+	data, _ := SelectData(table, db) // cRud
 	fmt.Println(data)
+
+	// 배열이나 슬라이스에서 구조체로 예쁘게 가져올 방법 없나?
 	for _, v := range data {
-		book.ID = uint(v[0].(*big.Int).Uint64())
-		book.Title = v[1].(string)
-		book.Author = v[2].(string)
+		book.ID, book.Title, book.Author = uint(v[0].(*big.Int).Uint64()), v[1].(string), v[2].(string)
+		books = append(books, book)
 	}
 
-	book.Title = "First Avenger"
+	books[0].Title = "First Avenger"
+	UpdateData(&books[0], table, db) // crUd
 
-	if err = updateData(&book, table, db); err != nil {
-		panic(err)
-	}
-
-	data, err = selectData(table, db)
-	if err != nil {
-		panic(err)
-	}
-
+	data, _ = SelectData(table, db)
 	fmt.Println(data)
 
-	if err = dropTable(table, db); err != nil {
+	// 테이블을 드랍해도 ql에서 쓰이는 id()는 계속 갱신되는 것 같다.
+	if err = DropTable(table, db); err != nil {
 		panic(err)
 	}
 }
