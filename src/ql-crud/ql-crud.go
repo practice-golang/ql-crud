@@ -66,7 +66,7 @@ func InsertData(book *Book, table string, db *ql.DB) error {
 	return nil
 }
 
-// SelectData : Crud
+// SelectData : cRud
 func SelectData(table string, db *ql.DB) ([][]interface{}, error) {
 	s, _, err := db.Run(ql.NewRWCtx(),
 		`begin transaction;
@@ -145,6 +145,7 @@ func main() {
 	}
 
 	books[0].Title = "First Avenger"
+	books[0].Author = "Stanley Martin Lieber"
 	UpdateData(&books[0], table, db) // crUd
 
 	data, _ = SelectData(table, db)
