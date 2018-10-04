@@ -1,4 +1,4 @@
-package main
+package main // import "ql-crud"
 
 import (
 	"fmt"

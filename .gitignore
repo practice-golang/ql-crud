@@ -4,5 +4,3 @@ bin
 ql-crud.exe
 ql.db
 vendor
-Gopkg.lock
-Gopkg.toml
